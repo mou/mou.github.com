@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Essentials of JIRA Hacking]]></title>
-  <link href="http://mou.github.com/atom.xml" rel="self"/>
+  <title><![CDATA[Category: JIRA 4.2 | Essentials of JIRA Hacking]]></title>
+  <link href="http://mou.github.com/blog/categories/jira-4-2/atom.xml" rel="self"/>
   <link href="http://mou.github.com/"/>
   <updated>2011-10-30T05:01:19+04:00</updated>
   <id>http://mou.github.com/</id>
@@ -18,7 +18,7 @@
     <link href="http://mou.github.com/blog/2011/10/30/memorypropertyset-bottleneck/"/>
     <updated>2011-10-30T02:19:00+04:00</updated>
     <id>http://mou.github.com/blog/2011/10/30/memorypropertyset-bottleneck</id>
-    <content type="html"><![CDATA[<h2>Let&#8217;s The Show begin</h2>
+    <content type="html"><![CDATA[<h2>Let's The Show begin</h2>
 
 <p>With this post I want to start a series of publications covering how you can increase the speed of work for <a href="http://www.atlassian.com/software/jira/overview">Atlassian JIRA</a>. I will consider only the versions starting with 4.0. Unfortunately 4.3 passed by me, so some of the techniques described it might not give the desired effect or simply do not work.</p>
 
@@ -27,9 +27,9 @@
 
 <h2>About bugs and legacy code</h2>
 
-<p>There is one question which preoccupies the minds of many, one way or another connected with the operation of JIRA. What should be done, what would it work faster? The issue is complex and has more than a few hundred answers. Most often you can hear &#8220;Take modern hardware, increase the amount of memory in two times!&#8221;. However, what if you have a cpu with 24 cores, 96Gb memory, SSD drives in a RAID array, and the speed of the JIRA still not satisfactory?</p>
+<p>There is one question which preoccupies the minds of many, one way or another connected with the operation of JIRA. What should be done, what would it work faster? The issue is complex and has more than a few hundred answers. Most often you can hear "Take modern hardware, increase the amount of memory in two times!". However, what if you have a cpu with 24 cores, 96Gb memory, SSD drives in a RAID array, and the speed of the JIRA still not satisfactory?</p>
 
-<p>There is a paradox, according to which there is no complicated software, which is the JIRA, without errors. Errors can lead as deviant behaviour of the system, as well as to the reduction of performance, if they are associated with multi-threaded code execution. Sufficiently well known problem of <a href="http://en.wikipedia.org/wiki/Legacy_code">legacy code</a>, which was written many years ago, with the use of old technologies, and absolutely other requirements to speed. It is many years later, this code can be the cause of developer&#8217;s headaches. But its main problem is that everyone is afraid to change something in it, since it is not always easy to assess the impact of these changes on the system as a whole.</p>
+<p>There is a paradox, according to which there is no complicated software, which is the JIRA, without errors. Errors can lead as deviant behaviour of the system, as well as to the reduction of performance, if they are associated with multi-threaded code execution. Sufficiently well known problem of <a href="http://en.wikipedia.org/wiki/Legacy_code">legacy code</a>, which was written many years ago, with the use of old technologies, and absolutely other requirements to speed. It is many years later, this code can be the cause of developer's headaches. But its main problem is that everyone is afraid to change something in it, since it is not always easy to assess the impact of these changes on the system as a whole.</p>
 
 <h2>The Issue</h2>
 
@@ -37,62 +37,40 @@
 
 <p>The essence of the problem: class <code>MemoryPropertySet</code> created to store the settings in memory, and not go after them all the time in the database. However, this class contains the <code>synchronized</code> methods like to read, and to write. And instead of that would increase performance, it is a cause of serious problems in processing a large number of requests. Here is a piece of code which is the cause of cases of major problems:</p>
 
-<figure class='code'><figcaption><span>Striped down source of OpenSymphony MemoryPropertySet</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-</pre></td><td class='code'><pre><code class='java'><span class='line'><span class="kd">public</span> <span class="kd">synchronized</span> <span class="n">Collection</span> <span class="nf">getKeys</span><span class="o">(</span><span class="n">String</span> <span class="n">prefix</span><span class="o">,</span> <span class="kt">int</span> <span class="n">type</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="o">...</span>
-</span><span class='line'><span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">public</span> <span class="kd">synchronized</span> <span class="kt">int</span> <span class="nf">getType</span><span class="o">(</span><span class="n">String</span> <span class="n">key</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="o">...</span>
-</span><span class='line'><span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">public</span> <span class="kd">synchronized</span> <span class="kt">boolean</span> <span class="nf">exists</span><span class="o">(</span><span class="n">String</span> <span class="n">key</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="o">...</span>
-</span><span class='line'><span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">public</span> <span class="kd">synchronized</span> <span class="kt">void</span> <span class="nf">remove</span><span class="o">(</span><span class="n">String</span> <span class="n">key</span><span class="o">)</span> <span class="o">{</span>
-</span><span class='line'>    <span class="o">...</span>
-</span><span class='line'><span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">protected</span> <span class="kd">synchronized</span> <span class="kt">void</span> <span class="nf">setImpl</span><span class="o">(</span><span class="kt">int</span> <span class="n">type</span><span class="o">,</span> <span class="n">String</span> <span class="n">key</span><span class="o">,</span> <span class="n">Object</span> <span class="n">value</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">DuplicatePropertyKeyException</span> <span class="o">{</span>
-</span><span class='line'>    <span class="o">...</span>
-</span><span class='line'><span class="o">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">protected</span> <span class="kd">synchronized</span> <span class="n">Object</span> <span class="nf">get</span><span class="o">(</span><span class="kt">int</span> <span class="n">type</span><span class="o">,</span> <span class="n">String</span> <span class="n">key</span><span class="o">)</span> <span class="kd">throws</span> <span class="n">InvalidPropertyTypeException</span> <span class="o">{</span>
-</span><span class='line'>    <span class="o">...</span>
-</span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
+<p>``` java Striped down source of OpenSymphony MemoryPropertySet</p>
 
+<pre><code>public synchronized Collection getKeys(String prefix, int type) {
+    ...
+}
 
-<p>As you can see all the methods are <code>synchronized</code> on <code>MemoryPropertySet</code> instance.</p>
+public synchronized int getType(String key) {
+    ...
+}
+
+public synchronized boolean exists(String key) {
+    ...
+}
+
+public synchronized void remove(String key) {
+    ...
+}
+
+protected synchronized void setImpl(int type, String key, Object value) throws DuplicatePropertyKeyException {
+    ...
+}
+
+protected synchronized Object get(int type, String key) throws InvalidPropertyTypeException {
+    ...
+}
+</code></pre>
+
+<p><code>``
+As you can see all the methods are</code>synchronized<code>on</code>MemoryPropertySet` instance.</p>
 
 <h2>Solution</h2>
 
-<p>To get rid of these problems we need to run JIRA under <strong>Java 5 (1.5)</strong>, but it is better <strong>Java 6 (1.6)</strong>. We did a little change to the original class, that would have been less of a problem. We will replace <code>synchronized</code> units, the use of <code>ReadWriteLock</code> that will not block the reading, if you are not currently writing. Below the code of the modified class:</p>
-
-<figure class='code'><figcaption><span> (MemoryPropertySet.java)</span> <a href='http://mou.github.com/downloads/code/memorypropertyset-bottleneck/MemoryPropertySet.java'>download</a></figcaption>
+<p>To get rid of these problems we need to run JIRA under <strong>Java 5 (1.5)</strong>, but it is better <strong>Java 6 (1.6)</strong>. We did a little change to the original class, that would have been less of a problem. We will replace <code>synchronized</code> units, the use of <code>ReadWriteLock</code> that will not block the reading, if you are not currently writing. Below the code of the modified class:
+<div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span> (MemoryPropertySet.java)</span> <a href='/downloads/code/memorypropertyset-bottleneck/MemoryPropertySet.java'>download</a></figcaption>
  <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
@@ -393,12 +371,10 @@
 </span><span class='line'>        <span class="o">}</span>
 </span><span class='line'>    <span class="o">}</span>
 </span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
-
-<p>There is another class with a similar problem - <code>SerializablePropertySet</code>. He is the direct descendant of the <code>MemoryPropertySet</code> and also contains synchronized method setImpl:</p>
-
-<figure class='code'><figcaption><span> (SerializablePropertySet.java)</span> <a href='http://mou.github.com/downloads/code/memorypropertyset-bottleneck/SerializablePropertySet.java'>download</a></figcaption>
+<p>There is another class with a similar problem - <code>SerializablePropertySet</code>. He is the direct descendant of the <code>MemoryPropertySet</code> and also contains synchronized method setImpl:
+<div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span> (SerializablePropertySet.java)</span> <a href='/downloads/code/memorypropertyset-bottleneck/SerializablePropertySet.java'>download</a></figcaption>
  <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
@@ -455,12 +431,10 @@
 </span><span class='line'>        <span class="k">return</span> <span class="n">serialMap</span><span class="o">;</span>
 </span><span class='line'>    <span class="o">}</span>
 </span><span class='line'><span class="o">}</span>
-</span></code></pre></td></tr></table></div></figure>
+</span></code></pre></td></tr></table></div></figure></notextile></div></p>
 
-
-<p>That would compile these classes you need to take a <code>propertyset-1.x.jar</code> from your distribution JIRA. Well, that would make it work will need to change the file <code>atlassian-jira/WEB-INF/classes/propertyset.xml</code>:</p>
-
-<figure class='code'><figcaption><span> (propertyset.xml)</span> <a href='http://mou.github.com/downloads/code/memorypropertyset-bottleneck/propertyset.xml'>download</a></figcaption>
+<p>That would compile these classes you need to take a <code>propertyset-1.x.jar</code> from your distribution JIRA. Well, that would make it work will need to change the file <code>atlassian-jira/WEB-INF/classes/propertyset.xml</code>:
+<div class='bogus-wrapper'><notextile><figure class='code'><figcaption><span> (propertyset.xml)</span> <a href='/downloads/code/memorypropertyset-bottleneck/propertyset.xml'>download</a></figcaption>
  <div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
@@ -519,10 +493,8 @@
 </span><span class='line'>    <span class="nt">&lt;propertyset</span> <span class="na">name=</span><span class="s">&quot;xml&quot;</span> <span class="na">class=</span><span class="s">&quot;com.opensymphony.module.propertyset.xml.XMLPropertySet&quot;</span><span class="nt">/&gt;</span>
 </span><span class='line'>    <span class="nt">&lt;propertyset</span> <span class="na">name=</span><span class="s">&quot;crowd&quot;</span> <span class="na">class=</span><span class="s">&quot;com.atlassian.crowd.integration.osuser.CrowdPropertySet&quot;</span><span class="nt">/&gt;</span>
 </span><span class='line'><span class="nt">&lt;/propertysets&gt;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Look carefully at <strong>19</strong> and <strong>20</strong> lines. That&#8217;s the way we change the configuration of the JIRA not to rewrite dozens of calls in the Atalassian code.</p>
+</span></code></pre></td></tr></table></div></figure></notextile></div>
+Look carefully at <strong>19</strong> and <strong>20</strong> lines. That's the way we change the configuration of the JIRA not to rewrite dozens of calls in the Atalassian code.</p>
 
 <h2>Conclusion</h2>
 
